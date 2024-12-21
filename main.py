@@ -1,5 +1,6 @@
 from typing import List, Optional
 import os
+import asyncio
 
 from fastapi import FastAPI, HTTPException
 import openai
@@ -10,8 +11,8 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # usato per eseguire con il server React
-        "https://nickchatrath.vercel.app",  # dominio del frontend su Vercel
+        "http://localhost:3000",  # Usato per eseguire con il server React
+        "https://nickchatrath.vercel.app",  # Dominio del frontend su Vercel
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -31,17 +32,22 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
 
+def get_completion(message: str) -> str:
+    completion = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": message},
+        ]
+    )
+    return completion.choices[0].message['content']
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
-        completion = await openai.ChatCompletion.acreate(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": request.message},
-            ]
-        )
-        return ChatResponse(response=completion.choices[0].message['content'])
+        # Esegui la chiamata sincrona in un thread separato
+        response = await asyncio.to_thread(get_completion, request.message)
+        return ChatResponse(response=response)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
