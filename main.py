@@ -6,14 +6,15 @@ from openai.types.beta.threads.run import RequiredAction, LastError
 from openai.types.beta.threads.run_submit_tool_outputs_params import ToolOutput
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import dotenv_values
+from dotenv import load_dotenv
+import os
 
-# Carica le variabili dal file .env
-config = dotenv_values(".env")
+# Carica le variabili d'ambiente dal file .env
+load_dotenv()
 
-# Estrai le variabili necessarie
-api_key = config.get("OPENAI_API_KEY")
-assistant_id = config.get("ASSISTANT_ID")
+# Estrai le variabili necessarie dal file .env
+api_key = os.getenv("OPENAI_API_KEY")
+assistant_id = os.getenv("ASSISTANT_ID")
 
 # Verifica che le variabili siano presenti
 if not api_key:
@@ -53,8 +54,8 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # Usato per eseguire con il server React
-        "https://nickchatrath.vercel.app",  # Dominio del frontend su Vercel
+        "http://localhost:3000",  # usato per eseguire con il server React
+        "https://nickchatrath.vercel.app",  # dominio del frontend su Vercel
     ],
     allow_credentials=True,
     allow_methods=["*"],
