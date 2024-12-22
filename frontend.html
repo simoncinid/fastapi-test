@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -64,32 +64,37 @@
     const apiUrl = "https://fastapi-test-dxov.onrender.com/chat";
 
     async function sendMessage() {
-      const userInput = document.getElementById("user-input").value;
-      if (!userInput) return;
+        const userInput = document.getElementById("user-input").value;
+        if (!userInput) return;
 
-      // Mostra il messaggio dell'utente
-      addMessage("user", userInput);
+        // Mostra il messaggio dell'utente
+        addMessage("user", userInput);
+        console.log("Messaggio inviato dall'utente:", userInput);
 
-      try {
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, prompt: userInput }),
-        });
+        try {
+            const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId, prompt: userInput }),
+            });
 
-        const data = await response.json();
-        if (response.ok) {
-          addMessage("assistant", data.response);
-        } else {
-          addMessage("assistant", "Errore: " + data.detail);
+            const data = await response.json();
+            console.log("Risposta ricevuta dal server:", data);
+
+            if (response.ok) {
+            addMessage("assistant", data.response);
+            } else {
+            addMessage("assistant", "Errore: " + data.detail);
+            }
+        } catch (error) {
+            console.error("Errore durante la richiesta:", error);
+            addMessage("assistant", "Errore di connessione.");
         }
-      } catch (error) {
-        addMessage("assistant", "Errore di connessione.");
-      }
 
-      // Pulisci l'input
-      document.getElementById("user-input").value = "";
-    }
+        // Pulisci l'input
+        document.getElementById("user-input").value = "";
+        }
+
 
     function addMessage(role, text) {
       const messageDiv = document.createElement("div");
