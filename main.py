@@ -29,40 +29,42 @@ async def test_endpoint():
 async def openai_assistant(request: OpenAIRequest):
     """Interagisce con l'assistente tramite ASSISTANT_ID."""
     try:
-        # Crea un nuovo thread
+        # Step 1: Crea un nuovo thread
         chat = openai.Client().beta.threads.create(
             messages=[
                 {"role": "user", "content": request.prompt}
             ]
         )
+        print(f"Thread creato: {chat.id}")
 
-        # Avvia un run con ASSISTANT_ID
+        # Step 2: Avvia un run con ASSISTANT_ID
         run = openai.Client().beta.threads.runs.create(
             thread_id=chat.id,
             assistant_id=ASSISTANT_ID
         )
+        print(f"Run avviato: {run.id}")
 
-        # Polling dello stato del run
+        # Step 3: Polling dello stato del run
         while run.status != "completed":
             time.sleep(0.5)
             run = openai.Client().beta.threads.runs.retrieve(
                 thread_id=chat.id, run_id=run.id
             )
+            print(f"Stato del run: {run.status}")
 
-        # Recupera i messaggi
+        # Step 4: Recupera i messaggi del thread
         message_response = openai.Client().beta.threads.messages.list(thread_id=chat.id)
         messages = message_response.data
+        print(f"Messaggi ricevuti: {messages}")
 
+        # Step 5: Trova il messaggio dell'assistente
         if messages:
-            # Cerca l'ultimo messaggio dell'assistente
-            latest_message = messages[-1]
-            if latest_message.role == "assistant":
-                # Estrai il valore del contenuto
-                response_text = latest_message.content[0].text.value
-                return {"response": response_text}
+            for message in messages:
+                if message.role == "assistant":
+                    # Step 6: Accedi al contenuto del messaggio
+                    response_text = message.content[0].text.value
+                    return {"response": response_text}
 
         return {"response": "Nessuna risposta trovata"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore durante la richiesta a OpenAI: {str(e)}")
-
-
