@@ -43,7 +43,7 @@ async def openai_assistant(request: OpenAIRequest):
         )
 
         # Polling dello stato del run
-        while run["status"] != "completed":
+        while run.status != "completed":
             time.sleep(0.5)
             run = openai.Client().beta.threads.runs.retrieve(
                 thread_id=chat.id, run_id=run.id
@@ -55,8 +55,8 @@ async def openai_assistant(request: OpenAIRequest):
 
         if messages:
             latest_message = messages[-1]
-            if latest_message["role"] == "assistant":
-                return {"response": latest_message["content"]}
+            if latest_message.role == "assistant":
+                return {"response": latest_message.content}
         return {"response": "Nessuna risposta trovata"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore durante la richiesta a OpenAI: {str(e)}")
