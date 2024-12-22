@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Assistant</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f4f4f9;
+    }
+    #chat {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .message {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 8px;
+    }
+    .user {
+      background-color: #d4f1f4;
+      text-align: right;
+    }
+    .assistant {
+      background-color: #f4d4f1;
+    }
+    #input-box {
+      display: flex;
+      margin-top: 20px;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div id="chat">
+    <h2>Chat Assistant</h2>
+    <div id="messages"></div>
+    <div id="input-box">
+      <input type="text" id="user-input" placeholder="Scrivi un messaggio..." />
+      <button onclick="sendMessage()">Invia</button>
+    </div>
+  </div>
+
+  <script>
+    const userId = `user_${Math.random().toString(36).substr(2, 9)}`;
+    const apiUrl = "http://localhost:8000/chat"; // Modifica con l'URL del tuo backend
+
+    async function sendMessage() {
+      const userInput = document.getElementById("user-input").value;
+      if (!userInput) return;
+
+      // Mostra il messaggio dell'utente
+      addMessage("user", userInput);
+
+      try {
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, prompt: userInput }),
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          addMessage("assistant", data.response);
+        } else {
+          addMessage("assistant", "Errore: " + data.detail);
+        }
+      } catch (error) {
+        addMessage("assistant", "Errore di connessione.");
+      }
+
+      // Pulisci l'input
+      document.getElementById("user-input").value = "";
+    }
+
+    function addMessage(role, text) {
+      const messageDiv = document.createElement("div");
+      messageDiv.className = `message ${role}`;
+      messageDiv.textContent = text;
+      document.getElementById("messages").appendChild(messageDiv);
+    }
+  </script>
+</body>
+</html>
