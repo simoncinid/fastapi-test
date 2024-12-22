@@ -53,16 +53,16 @@ async def openai_assistant(request: OpenAIRequest):
         message_response = openai.Client().beta.threads.messages.list(thread_id=chat.id)
         messages = message_response.data
 
-        # Debug: Stampa tutti i messaggi ricevuti
-        print("Messaggi ricevuti dal thread:", messages)
-
         if messages:
             # Cerca l'ultimo messaggio dell'assistente
             latest_message = messages[-1]
             if latest_message.role == "assistant":
-                return {"response": latest_message.content}
+                # Estrai il valore del contenuto
+                response_text = latest_message.content[0].text.value
+                return {"response": response_text}
 
         return {"response": "Nessuna risposta trovata"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Errore durante la richiesta a OpenAI: {str(e)}")
+
 
