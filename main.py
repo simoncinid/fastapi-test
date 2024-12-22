@@ -6,6 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import httpx
 import asyncio
+import logging
+
+# Configura il logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Estrai le variabili necessarie dall'ambiente
 api_key = os.getenv("OPENAI_API_KEY")
@@ -34,11 +39,11 @@ app.add_middleware(
 
 # Definizione dei modelli Pydantic
 class RunStatus(BaseModel):
-    run_id: str
-    thread_id: str
-    status: str
-    required_action: Optional[dict]  # Modifica in base alla struttura effettiva
-    last_error: Optional[dict]       # Modifica in base alla struttura effettiva
+    run_id: Optional[str]
+    thread_id: Optional[str]
+    status: Optional[str]
+    required_action: Optional[dict]
+    last_error: Optional[dict]
 
 class ThreadMessage(BaseModel):
     content: str
@@ -74,9 +79,15 @@ async def post_new():
         async with httpx.AsyncClient() as client:
             # Crea un nuovo thread
             create_thread_url = f"{base_url}/{assistant_id}/threads"
-            response = await client.post(create_thread_url, headers=headers, json={})
+            # Aggiungi un nome al thread per evitare payload vuoti
+            thread_creation_payload = {"name": "New Thread"}
+            response = await client.post(create_thread_url, headers=headers, json=thread_creation_payload)
+            logger.info(f"POST {create_thread_url} - Status Code: {response.status_code}")
+            logger.debug(f"Response: {response.text}")
             
-            if response.status_code != 200:
+            if response.status_code not in (200, 201):
+                # Log dell'errore
+                logger.error(f"Errore nella creazione del thread: {response.status_code} - {response.text}")
                 raise HTTPException(status_code=response.status_code, detail=response.json())
             
             thread_data = response.json()
@@ -86,16 +97,30 @@ async def post_new():
             required_action = thread_data.get("required_action")
             last_error = thread_data.get("last_error")
             
+            if not thread_id:
+                raise HTTPException(status_code=500, detail="Thread ID non trovato nella risposta dell'API.")
+            
             # Invia un messaggio iniziale nascosto
             send_message_url = f"{base_url}/{assistant_id}/threads/{thread_id}/messages"
             hidden_message = {
                 "content": "Greet the user and tell it about yourself and ask it what it is looking for.",
-                "role": "user",
+                "role": "system",  # Potrebbe essere 'system' o 'user' a seconda dell'API
                 "metadata": {
                     "type": "hidden"
                 }
             }
-            await client.post(send_message_url, headers=headers, json=hidden_message)
+            send_message_response = await client.post(send_message_url, headers=headers, json=hidden_message)
+            logger.info(f"POST {send_message_url} - Status Code: {send_message_response.status_code}")
+            logger.debug(f"Response: {send_message_response.text}")
+            
+            if send_message_response.status_code not in (200, 201):
+                logger.error(f"Errore nell'invio del messaggio nascosto: {send_message_response.status_code} - {send_message_response.text}")
+                raise HTTPException(status_code=send_message_response.status_code, detail=send_message_response.json())
+            
+            # Potrebbe essere necessario aggiornare run_id o status dopo l'invio del messaggio
+            # A seconda della struttura della risposta, ad esempio:
+            # run_id = send_message_response.json().get("run_id", run_id)
+            # status = send_message_response.json().get("status", status)
             
             return RunStatus(
                 run_id=run_id,
@@ -105,113 +130,8 @@ async def post_new():
                 last_error=last_error
             )
     except httpx.HTTPStatusError as e:
+        logger.error(f"HTTPStatusError: {str(e)}")
         raise HTTPException(status_code=e.response.status_code, detail=e.response.json())
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Endpoint per verificare una run
-@app.get("/api/threads/{thread_id}/runs/{run_id}", response_model=RunStatus)
-async def get_run(thread_id: str, run_id: str):
-    try:
-        async with httpx.AsyncClient() as client:
-            retrieve_run_url = f"{base_url}/{assistant_id}/threads/{thread_id}/runs/{run_id}"
-            response = await client.get(retrieve_run_url, headers=headers)
-            
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=response.json())
-            
-            run_data = response.json()
-            return RunStatus(
-                run_id=run_data.get("id"),
-                thread_id=thread_id,
-                status=run_data.get("status"),
-                required_action=run_data.get("required_action"),
-                last_error=run_data.get("last_error")
-            )
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=e.response.json())
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Endpoint per inviare tool outputs
-@app.post("/api/threads/{thread_id}/runs/{run_id}/tool", response_model=RunStatus)
-async def post_tool(thread_id: str, run_id: str, tool_outputs: List[CreateMessage]):
-    try:
-        async with httpx.AsyncClient() as client:
-            submit_tool_url = f"{base_url}/{assistant_id}/threads/{thread_id}/runs/{run_id}/tool"
-            # Adatta tool_outputs al formato richiesto dall'API
-            tool_outputs_payload = [{"tool_id": "tool_abc", "output": msg.content} for msg in tool_outputs]
-            response = await client.post(submit_tool_url, headers=headers, json=tool_outputs_payload)
-            
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=response.json())
-            
-            run_data = response.json()
-            return RunStatus(
-                run_id=run_data.get("id"),
-                thread_id=thread_id,
-                status=run_data.get("status"),
-                required_action=run_data.get("required_action"),
-                last_error=run_data.get("last_error")
-            )
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=e.response.json())
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Endpoint per recuperare i messaggi di un thread
-@app.get("/api/threads/{thread_id}", response_model=Thread)
-async def get_thread(thread_id: str):
-    try:
-        async with httpx.AsyncClient() as client:
-            list_messages_url = f"{base_url}/{assistant_id}/threads/{thread_id}/messages"
-            response = await client.get(list_messages_url, headers=headers)
-            
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=response.json())
-            
-            messages_data = response.json()
-            messages = [
-                ThreadMessage(
-                    content=msg.get("content", ""),
-                    role=msg.get("role", ""),
-                    hidden=msg.get("metadata", {}).get("type") == "hidden",
-                    id=msg.get("id", ""),
-                    created_at=msg.get("created_at", 0)
-                )
-                for msg in messages_data.get("data", [])
-            ]
-            
-            return Thread(messages=messages)
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=e.response.json())
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Endpoint per inviare un nuovo messaggio in un thread
-@app.post("/api/threads/{thread_id}", response_model=RunStatus)
-async def post_thread(thread_id: str, message: CreateMessage):
-    try:
-        async with httpx.AsyncClient() as client:
-            send_message_url = f"{base_url}/{assistant_id}/threads/{thread_id}/messages"
-            user_message = {
-                "content": message.content,
-                "role": "user"
-            }
-            response = await client.post(send_message_url, headers=headers, json=user_message)
-            
-            if response.status_code != 200:
-                raise HTTPException(status_code=response.status_code, detail=response.json())
-            
-            run_data = response.json()
-            return RunStatus(
-                run_id=run_data.get("run_id"),
-                thread_id=thread_id,
-                status=run_data.get("status"),
-                required_action=run_data.get("required_action"),
-                last_error=run_data.get("last_error")
-            )
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=e.response.json())
-    except Exception as e:
+        logger.exception("Errore imprevisto:")
         raise HTTPException(status_code=500, detail=str(e))
