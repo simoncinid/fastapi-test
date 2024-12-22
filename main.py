@@ -6,21 +6,17 @@ from openai.types.beta.threads.run import RequiredAction, LastError
 from openai.types.beta.threads.run_submit_tool_outputs_params import ToolOutput
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 import os
 
-# Carica le variabili d'ambiente dal file .env
-load_dotenv()
-
-# Estrai le variabili necessarie dal file .env
+# Estrai le variabili necessarie dall'ambiente
 api_key = os.getenv("OPENAI_API_KEY")
 assistant_id = os.getenv("ASSISTANT_ID")
 
 # Verifica che le variabili siano presenti
 if not api_key:
-    raise ValueError("La variabile OPENAI_API_KEY non è impostata nel file .env.")
+    raise ValueError("La variabile OPENAI_API_KEY non è impostata nelle variabili d'ambiente di Render.com.")
 if not assistant_id:
-    raise ValueError("La variabile ASSISTANT_ID non è impostata nel file .env.")
+    raise ValueError("La variabile ASSISTANT_ID non è impostata nelle variabili d'ambiente di Render.com.")
 
 # Inizializza il client OpenAI asincrono
 client = AsyncOpenAI(api_key=api_key)
@@ -54,8 +50,8 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # usato per eseguire con il server React
-        "https://nickchatrath.vercel.app",  # dominio del frontend su Vercel
+        "http://localhost:3000",  # Usato per eseguire con il server React
+        "https://nickchatrath.vercel.app",  # Dominio del frontend su Vercel
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -67,7 +63,7 @@ async def post_new():
     try:
         # Crea un nuovo thread
         thread = await client.beta.threads.create()
-        
+
         # Invia un messaggio iniziale nascosto
         await client.beta.threads.messages.create(
             thread_id=thread.id,
@@ -77,13 +73,13 @@ async def post_new():
                 "type": "hidden"
             }
         )
-        
+
         # Crea una nuova run associata all'assistente specificato
         run = await client.beta.threads.runs.create(
             thread_id=thread.id,
             assistant_id=assistant_id
         )
-        
+
         return RunStatus(
             run_id=run.id,
             thread_id=thread.id,
@@ -101,7 +97,7 @@ async def get_run(thread_id: str, run_id: str):
             thread_id=thread_id,
             run_id=run_id
         )
-        
+
         return RunStatus(
             run_id=run.id,
             thread_id=thread_id,
@@ -120,7 +116,7 @@ async def post_tool(thread_id: str, run_id: str, tool_outputs: List[ToolOutput])
             thread_id=thread_id,
             tool_outputs=tool_outputs
         )
-        
+
         return RunStatus(
             run_id=run.id,
             thread_id=thread_id,
@@ -137,7 +133,7 @@ async def get_thread(thread_id: str):
         messages = await client.beta.threads.messages.list(
             thread_id=thread_id
         )
-        
+
         result = [
             ThreadMessage(
                 content=message.content[0].text.value if message.content else "",
@@ -148,7 +144,7 @@ async def get_thread(thread_id: str):
             )
             for message in messages.data
         ]
-        
+
         return Thread(
             messages=result,
         )
@@ -164,13 +160,13 @@ async def post_thread(thread_id: str, message: CreateMessage):
             content=message.content,
             role="user"
         )
-        
+
         # Crea una nuova run associata all'assistente specificato
         run = await client.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=assistant_id
         )
-        
+
         return RunStatus(
             run_id=run.id,
             thread_id=thread_id,
