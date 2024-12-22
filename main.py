@@ -1,71 +1,62 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from fastapi.middleware.cors import CORSMiddleware
-import os
 import openai
-import logging
+import os
+import time
 
-# Configura il logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configura le variabili di ambiente per OpenAI
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ASSISTANT_ID = os.getenv("ASSISTANT_ID")
 
-# Estrai le variabili necessarie dall'ambiente
-api_key = os.getenv("OPENAI_API_KEY")
-assistant_id = os.getenv("ASSISTANT_ID")
+if not OPENAI_API_KEY or not ASSISTANT_ID:
+    raise EnvironmentError("Le variabili di ambiente OPENAI_API_KEY e ASSISTANT_ID devono essere configurate.")
 
-# Verifica che le variabili siano presenti
-if not api_key:
-    raise ValueError("La variabile OPENAI_API_KEY non è impostata nelle variabili d'ambiente.")
-if not assistant_id:
-    raise ValueError("La variabile ASSISTANT_ID non è impostata nelle variabili d'ambiente.")
-
-# Inizializza il client OpenAI
-openai.api_key = api_key
+openai.api_key = OPENAI_API_KEY
 
 # Inizializza l'app FastAPI
 app = FastAPI()
 
-# Configura il middleware CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Usato per eseguire con il server React
-        "https://nickchatrath.vercel.app",  # Dominio del frontend su Vercel
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Definizione dei modelli Pydantic
+# Modello per la richiesta
 class OpenAIRequest(BaseModel):
     prompt: str
 
-class OpenAIResponse(BaseModel):
-    response: str
-
-# Endpoint di test
 @app.get("/test")
-async def test():
+async def test_endpoint():
+    """Endpoint di test per verificare se l'API funziona."""
     return {"message": "API funzionante"}
 
-# Endpoint per testare le funzionalità di OpenAI
-@app.post("/openai-test", response_model=OpenAIResponse)
-async def openai_test(request: OpenAIRequest):
-    user_prompt = request.prompt
+@app.post("/openai-assistant")
+async def openai_assistant(request: OpenAIRequest):
+    """Interagisce con l'assistente tramite ASSISTANT_ID."""
     try:
-        # Crea una richiesta di completamento del chat
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
+        # Crea un nuovo thread
+        chat = openai.Client().beta.threads.create(
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": request.prompt}
             ]
         )
-        # Estrai la risposta del modello
-        assistant_reply = response['choices'][0]['message']['content']
-        logger.info(f"Assistant response: {assistant_reply}")
-        return OpenAIResponse(response=assistant_reply)
+
+        # Avvia un run con ASSISTANT_ID
+        run = openai.Client().beta.threads.runs.create(
+            thread_id=chat.id,
+            assistant_id=ASSISTANT_ID
+        )
+
+        # Polling dello stato del run
+        while run["status"] != "completed":
+            time.sleep(0.5)
+            run = openai.Client().beta.threads.runs.retrieve(
+                thread_id=chat.id, run_id=run.id
+            )
+
+        # Recupera i messaggi
+        message_response = openai.Client().beta.threads.messages.list(thread_id=chat.id)
+        messages = message_response.data
+
+        if messages:
+            latest_message = messages[-1]
+            if latest_message["role"] == "assistant":
+                return {"response": latest_message["content"]}
+        return {"response": "Nessuna risposta trovata"}
     except Exception as e:
-        logger.exception("Errore imprevisto:")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Errore durante la richiesta a OpenAI: {str(e)}")
