@@ -66,9 +66,6 @@ async def openai_test(request: OpenAIRequest):
         assistant_reply = response['choices'][0]['message']['content']
         logger.info(f"Assistant response: {assistant_reply}")
         return OpenAIResponse(response=assistant_reply)
-    except:
-        logger.error(f"Errore OpenAI")
-        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.exception("Errore imprevisto:")
         raise HTTPException(status_code=500, detail=str(e))
