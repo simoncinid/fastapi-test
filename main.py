@@ -11,10 +11,13 @@ logger = logging.getLogger(__name__)
 
 # Estrai le variabili necessarie dall'ambiente
 api_key = os.getenv("OPENAI_API_KEY")
+assistant_id = os.getenv("ASSISTANT_ID")
 
-# Verifica che la variabile sia presente
+# Verifica che le variabili siano presenti
 if not api_key:
-    raise ValueError("La variabile OPENAI_API_KEY non è impostata nelle variabili d'ambiente di Render.com.")
+    raise ValueError("La variabile OPENAI_API_KEY non è impostata nelle variabili d'ambiente.")
+if not assistant_id:
+    raise ValueError("La variabile ASSISTANT_ID non è impostata nelle variabili d'ambiente.")
 
 # Inizializza il client OpenAI
 openai.api_key = api_key
@@ -49,21 +52,22 @@ async def test():
 # Endpoint per testare le funzionalità di OpenAI
 @app.post("/openai-test", response_model=OpenAIResponse)
 async def openai_test(request: OpenAIRequest):
+    user_prompt = request.prompt
     try:
         # Crea una richiesta di completamento del chat
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": request.prompt}
+                {"role": "user", "content": user_prompt}
             ]
         )
         # Estrai la risposta del modello
         assistant_reply = response['choices'][0]['message']['content']
         logger.info(f"Assistant response: {assistant_reply}")
         return OpenAIResponse(response=assistant_reply)
-    except openai.error.OpenAIError as e:
-        logger.error(f"Errore OpenAI: {str(e)}")
+    except:
+        logger.error(f"Errore OpenAI")
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.exception("Errore imprevisto:")
