@@ -7,6 +7,7 @@ from openai.types.beta.threads.run_submit_tool_outputs_params import ToolOutput
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import openai
 
 # Estrai le variabili necessarie dall'ambiente
 api_key = os.getenv("OPENAI_API_KEY")
@@ -17,6 +18,14 @@ if not api_key:
     raise ValueError("La variabile OPENAI_API_KEY non è impostata nelle variabili d'ambiente di Render.com.")
 if not assistant_id:
     raise ValueError("La variabile ASSISTANT_ID non è impostata nelle variabili d'ambiente di Render.com.")
+
+# Aggiungi l'intestazione 'OpenAI-Beta: assistants=v2' alle richieste API
+# Questo modifica le intestazioni di default per tutte le richieste future
+if "openai.api_requestor.Requestor" in dir(openai):
+    openai.api_requestor.Requestor.DEFAULT_HEADERS["OpenAI-Beta"] = "assistants=v2"
+else:
+    # Fallback per versioni diverse della libreria
+    openai.headers["OpenAI-Beta"] = "assistants=v2"
 
 # Inizializza il client OpenAI asincrono
 client = AsyncOpenAI(api_key=api_key)
@@ -50,8 +59,8 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # Usato per eseguire con il server React
-        "https://nickchatrath.vercel.app",  # Dominio del frontend su Vercel
+        "http://localhost:3000",  # usato per eseguire con il server React
+        "https://nickchatrath.vercel.app",  # dominio del frontend su Vercel
     ],
     allow_credentials=True,
     allow_methods=["*"],
