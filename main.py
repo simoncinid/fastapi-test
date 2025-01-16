@@ -31,26 +31,28 @@ app.add_middleware(
 # Modello per la richiesta
 class OpenAIRequest(BaseModel):
     user_id: str
+    thread_id: str
     prompt: str
 
-# Memorizza lo stato dei thread per ogni utente e assistente
+# Memorizza lo stato dei thread per ogni utente, assistente e thread
 active_threads = {}
 
 @app.post("/chat/{assistant_id}")
 async def chat(assistant_id: str, request: OpenAIRequest):
     """Gestisce la conversazione con l'assistente specificato."""
     user_id = request.user_id
+    thread_id = request.thread_id
     prompt = request.prompt
 
     try:
-        logging.debug(f"Richiesta ricevuta: user_id={user_id}, assistant_id={assistant_id}, prompt={prompt}")
+        logging.debug(f"Richiesta ricevuta: user_id={user_id}, assistant_id={assistant_id}, thread_id={thread_id}, prompt={prompt}")
 
-        # Chiave univoca per thread per utente e assistente
-        thread_key = f"{user_id}:{assistant_id}"
+        # Chiave univoca per thread per utente, assistente e thread_id
+        thread_key = f"{user_id}:{assistant_id}:{thread_id}"
 
-        # Step 1: Verifica se esiste già un thread per l'utente e l'assistente
+        # Step 1: Verifica se esiste già un thread per l'utente, assistente e thread_id
         if thread_key not in active_threads:
-            logging.debug(f"Nessun thread trovato per user_id={user_id} e assistant_id={assistant_id}. Creo un nuovo thread.")
+            logging.debug(f"Nessun thread trovato per thread_key={thread_key}. Creo un nuovo thread.")
             # Crea un nuovo thread alla prima richiesta
             chat = openai.Client().beta.threads.create(
                 messages=[{"role": "user", "content": prompt}]
@@ -59,7 +61,7 @@ async def chat(assistant_id: str, request: OpenAIRequest):
         else:
             # Aggiungi un nuovo messaggio al thread esistente
             chat_id = active_threads[thread_key]
-            logging.debug(f"Thread esistente trovato per user_id={user_id} e assistant_id={assistant_id}: thread_id={chat_id}")
+            logging.debug(f"Thread esistente trovato per thread_key={thread_key}: thread_id={chat_id}")
             openai.Client().beta.threads.messages.create(
                 thread_id=chat_id, role="user", content=prompt
             )
@@ -84,17 +86,17 @@ async def chat(assistant_id: str, request: OpenAIRequest):
             thread_id=active_threads[thread_key]
         )
         messages = message_response.data
-        logging.debug(f"Messaggi ricevuti per thread_id={active_threads[thread_key]}: {messages}")
+        logging.debug(f"Messaggi ricevuti per thread_key={thread_key}: {messages}")
 
         # Step 5: Trova l'ultimo messaggio dell'assistente
         for message in messages[::-1]:  # Itera al contrario per ottenere l'ultimo messaggio
             if message.role == "assistant" and message.run_id == run.id:
                 response_text = message.content[0].text.value
-                logging.debug(f"Risposta trovata per user_id={user_id} e assistant_id={assistant_id}: {response_text}")
+                logging.debug(f"Risposta trovata per thread_key={thread_key}: {response_text}")
                 return {"response": response_text}
 
-        logging.warning(f"Nessuna risposta trovata per user_id={user_id} e assistant_id={assistant_id}")
+        logging.warning(f"Nessuna risposta trovata per thread_key={thread_key}")
         return {"response": "Nessuna risposta trovata"}
     except Exception as e:
-        logging.error(f"Errore durante la richiesta per user_id={user_id} e assistant_id={assistant_id}: {str(e)}")
+        logging.error(f"Errore durante la richiesta per thread_key={thread_key}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Errore durante la richiesta a OpenAI: {str(e)}")
